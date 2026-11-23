@@ -1,0 +1,4 @@
+# Dados abertos ficam só no computador. No site vai apenas o dados.trancado.js.
+**/dados.js
+.DS_Store
+Thumbs.db

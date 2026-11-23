@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0b0b0c">
+<title>Relatório · Prefeitura de Hortolândia</title>
+<link rel="icon" href="../../design-system/e3/marca/e3-bloco-preto.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../../design-system/e3/scrollcraft/scrollcraft.css">
+<link rel="stylesheet" href="../../design-system/e3/relatorio-e3.css">
+</head>
+<body>
+<!-- Página única da Prefeitura de Hortolândia. Semanal, Diário e Mensal trocam os dados aqui mesmo (?r=tipo/AAAA-MM-DD).
+     Os dados de cada edição ficam em dados.trancado.js (AES-GCM) e só abrem com usuário e senha. -->
+<script src="../../design-system/e3/scrollcraft/scrollcraft.js"></script>
+<script src="../../design-system/e3/relatorio-e3.js"></script>
+<script>
+  RelatorioE3.iniciar({
+    trancado: true,
+    fundoAcesso: 'capa/capa-desktop.jpg',
+    edicoes: { semanal: ['2026-11-16'], diario: [], mensal: [] },
+    logoE3: '../../design-system/e3/marca/e3-bloco-amarelo.svg',
+    logoE3Escuro: '../../design-system/e3/marca/e3-bloco-preto.svg',
+    marcaBranca: 'marca/hortolandia-branco.png',
+    marcaPreta: 'marca/hortolandia-preto.png'
+  });
+</script>
+</body>
+</html>
