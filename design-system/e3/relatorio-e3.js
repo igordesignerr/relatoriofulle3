@@ -85,6 +85,7 @@
   const TIPOS = [['semanal', 'Semanal', 'semana'], ['diario', 'Diário', 'dia'], ['mensal', 'Mensal', 'mes']];
   const TIPO_TXT = { semanal: 'semanal', diario: 'diário', mensal: 'mensal' };
   const DA = { semanal: 'da semana', diario: 'do dia', mensal: 'do mês' };
+  const tituloDe = D => D.titulo || 'Relatório ' + TIPO_TXT[D.tipo] + ' de redes sociais';
 
   /* ---------------- seções ---------------- */
   function capa(D, cfg, ctx) {
@@ -104,7 +105,7 @@
         cfg.logoE3 ? h('img', { class: 'capa-e3', src: cfg.logoE3, alt: 'E3 Comunicação Integrada' }) : null),
       h('div', { class: 'capa-txt', 'data-plano': '-0.25' },
         h('p', { class: 'capa-local', 'data-sc-cue': sai }, ic('pin'), D.cliente.cidade + (D.cliente.uf ? ' · ' + D.cliente.uf : '')),
-        h('h1', { 'data-sc-cue': sai, 'data-sc-kinetic': sai ? 'lines' : null }, 'Relatório ' + TIPO_TXT[D.tipo] + ' de redes sociais'),
+        h('h1', { 'data-sc-cue': sai, 'data-sc-kinetic': sai ? 'lines' : null }, tituloDe(D)),
         h('p', { class: 'capa-periodo', 'data-sc-cue': sai }, D.periodo.texto + (ano ? ' de ' + ano : '')))), 1.7);
   }
 
@@ -127,7 +128,8 @@
           h('span', { class: 'resumo-per' }, D.periodo.curto || '')),
         h('p', { class: 'resumo-txt', html: D.resumo, 'data-sc-cue': cue('0.02', '0.16'), 'data-sc-kinetic': 'lines' }),
         h('div', { class: 'chips', 'data-sc-cue': cue('0.5', '0.3') }, (D.redes || []).map(r => h('a', { class: 'chip', href: '#rede-' + r.rede, 'data-ir': 'rede-' + r.rede }, ic(r.rede), r.nome)),
-          h('a', { class: 'chip', href: '#sentimento', 'data-ir': 'sentimento' }, 'Sentimento')))), 1.6);
+          (D.temas || []).map(t => h('a', { class: 'chip', href: '#tema-' + t.id, 'data-ir': 'tema-' + t.id }, t.nome)),
+          D.sentimento ? h('a', { class: 'chip', href: '#sentimento', 'data-ir': 'sentimento' }, 'Sentimento') : null))), 1.6);
   }
 
   /* arco (meio círculo) e anel */
@@ -390,11 +392,155 @@
         (cfg.logoE3Escuro || cfg.logoE3) ? h('img', { class: 'fim-e3', src: cfg.logoE3Escuro || cfg.logoE3, alt: 'E3 Comunicação Integrada' }) : null,
         h('span', { class: 'fim-x', 'aria-hidden': 'true' }, '×'),
         (cfg.marcaPreta || cfg.marcaBranca) ? h('img', { class: 'fim-cliente', src: cfg.marcaPreta || cfg.marcaBranca, alt: D.cliente.nome }) : h('b', {}, D.cliente.nome)),
-      h('p', { class: 'fim-txt', 'data-sc-cue': '0.2' }, 'Relatório ' + TIPO_TXT[D.tipo] + ' de redes sociais · ' + D.cliente.nome + ' · ' + D.periodo.texto + (ano ? ' de ' + ano : '')),
+      h('p', { class: 'fim-txt', 'data-sc-cue': '0.2' }, tituloDe(D) + ' · ' + D.cliente.nome + ' · ' + D.periodo.texto + (ano ? ' de ' + ano : '')),
       D.cliente.slogan ? h('p', { class: 'fim-slogan', 'data-sc-cue': '0.24' }, D.cliente.slogan) : null,
-      h('p', { class: 'fim-nota', 'data-sc-cue': '0.26' }, 'Produzido pela E3 Comunicação Integrada. Valores por dia, temas, publicadores e pesos dos termos lidos dos gráficos de origem (aproximados).'),
+      h('p', { class: 'fim-nota', 'data-sc-cue': '0.26' }, D.notaFim || 'Produzido pela E3 Comunicação Integrada. Valores por dia, temas, publicadores e pesos dos termos lidos dos gráficos de origem (aproximados).'),
       h('a', { class: 'fim-topo so-tela', href: '#inicio', 'data-ir': 'inicio' }, ic('topo'), 'Voltar ao início'));
     return cena(f);
+  }
+
+  /* ---------------- diário: calendário, números do dia e notícias por tema ---------------- */
+  const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  const isoDe = (a, m, d) => a + '-' + String(m + 1).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  const redeDe = link => /facebook\.com/.test(link || '') ? 'facebook' : /tiktok\.com/.test(link || '') ? 'tiktok' : 'instagram';
+
+  /* calendário de consulta: dias com edição abrem o relatório; os outros ficam apagados */
+  function calendario(D, ctx) {
+    if (D.tipo !== 'diario') return null;
+    const datas = (ctx.edicoes.diario || []).slice().sort();
+    const meses = [...new Set(datas.map(x => x.slice(0, 7)))];
+    let atual = (ctx.data || datas[datas.length - 1]).slice(0, 7);
+    const hoje = new Date(), hojeIso = isoDe(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+    const titulo = h('h3', { class: 'cal-mes', 'aria-live': 'polite' });
+    const grade = h('div', { class: 'cal-grade', role: 'grid' });
+    const ant = h('button', { type: 'button', class: 'cal-nav', 'aria-label': 'Mês anterior', onclick: () => anda(-1) }, '‹');
+    const prox = h('button', { type: 'button', class: 'cal-nav', 'aria-label': 'Próximo mês', onclick: () => anda(1) }, '›');
+    const conta = h('p', { class: 'cal-conta' });
+    function anda(k) { const i = meses.indexOf(atual) + k; if (i >= 0 && i < meses.length) { atual = meses[i]; pinta(); } }
+    function pinta() {
+      const [a, m] = atual.split('-').map(Number), m0 = m - 1;
+      titulo.textContent = MESES[m0][0].toUpperCase() + MESES[m0].slice(1) + ' de ' + a;
+      const i = meses.indexOf(atual);
+      ant.disabled = i <= 0; prox.disabled = i < 0 || i >= meses.length - 1;
+      const inicio = new Date(a, m0, 1).getDay(), dias = new Date(a, m + 0, 0).getDate();
+      const doMes = datas.filter(x => x.startsWith(atual)).length;
+      conta.textContent = doMes === 1 ? '1 edição neste mês' : doMes + ' edições neste mês';
+      grade.replaceChildren(
+        ...['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map(s => h('span', { class: 'cal-sem', 'aria-hidden': 'true' }, s)),
+        ...Array.from({ length: inicio }, () => h('span', { class: 'cal-vazio' })),
+        ...Array.from({ length: dias }, (_, k) => {
+          const iso = isoDe(a, m0, k + 1), tem = datas.includes(iso), esta = iso === ctx.data;
+          const cls = 'cal-dia' + (tem ? ' is-ok' : ' is-off') + (esta ? ' is-atual' : '') + (iso === hojeIso ? ' is-hoje' : '');
+          const rot = (k + 1) + ' de ' + MESES[m0] + (tem ? (esta ? ', edição aberta' : ', abrir edição') : ', sem edição');
+          return tem && !esta
+            ? h('button', { type: 'button', class: cls, 'aria-label': rot, onclick: () => ctx.abrir('diario', iso) }, String(k + 1))
+            : h('span', { class: cls, 'aria-label': rot, 'aria-current': esta ? 'date' : null }, String(k + 1));
+        }));
+    }
+    pinta();
+    return cena(h('section', { class: 'sec sec--cal so-tela', id: 'calendario', 'data-sec': 'cal', 'aria-labelledby': 't-cal' },
+      h('div', { class: 'cal-wrap' },
+        h('div', { class: 'cal-txt', 'data-sc-cue': '0.08' },
+          h('h2', { id: 't-cal' }, 'Calendário'),
+          h('p', {}, 'Escolha um dia para abrir o relatório. Os dias apagados ainda não têm edição.'),
+          h('ul', { class: 'cal-leg' },
+            h('li', {}, h('i', { class: 'is-atual' }), 'Dia aberto'),
+            h('li', {}, h('i', { class: 'is-ok' }), 'Com edição'),
+            h('li', {}, h('i', { class: 'is-off' }), 'Sem edição'))),
+        h('div', { class: 'cal-card', 'data-sc-cue': '0.14' },
+          h('header', {}, ant, titulo, prox),
+          grade, conta))));
+  }
+
+  function numerosDia(D) {
+    if (!D.temas) return null;
+    const pags = (D.paginas || []).slice().sort((a, b) => b.n - a.n);
+    const tot = pags.reduce((s, p) => s + p.n, 0);
+    const ass = D.temas.reduce((s, t) => s + t.noticias.length, 0);
+    const rep = D.temas.reduce((s, t) => s + t.noticias.filter(n => n.fontes.length > 1).length, 0);
+    const pubT = t => t.noticias.reduce((s, n) => s + n.fontes.length, 0);
+    const maxP = pags.length ? pags[0].n : 1, maxT = Math.max(...D.temas.map(pubT));
+    const cel = (area, i, card) => h('div', { class: 'cel cel--' + area, 'data-sc-cue': cue((0.1 + i * 0.05).toFixed(3), (0.12 + i * 0.04).toFixed(3)) }, card);
+    return cena(h('section', { class: 'sec sec--numeros sec--dia', id: 'numeros', 'data-sec': 'numeros', 'aria-labelledby': 't-num' },
+      h('header', { class: 'sec-cab', 'data-sc-cue': '0.06' }, h('h2', { id: 't-num' }, 'O dia em números'),
+        h('p', {}, 'Monitoramento web: ' + (D.periodo.coleta || D.periodo.texto) + '.')),
+      h('div', { class: 'dia-grade' },
+        cel('pub', 0, h('article', { class: 'bento d-pub', 'data-sc-tilt': '5' },
+          h('header', {}, h('h3', {}, 'Publicações'), h('span', { class: 'bento-tag' }, 'externas')),
+          h('div', { class: 'd-num' }, num(tot)), h('p', {}, 'sobre Hortolândia, em ', h('b', {}, pags.length + ' páginas'), ' monitoradas'))),
+        cel('ass', 1, h('article', { class: 'bento d-ass', 'data-sc-tilt': '5' },
+          h('header', {}, h('h3', {}, 'Assuntos')),
+          h('div', { class: 'd-num' }, num(ass)), h('p', {}, rep ? [h('b', {}, rep + (rep === 1 ? ' saiu' : ' saíram')), ' em mais de uma página'] : 'cada um em uma página'))),
+        cel('pag', 2, h('article', { class: 'bento d-lista', 'data-sc-tilt': '4' },
+          h('header', {}, h('h3', {}, 'Publicações por página'), h('span', { class: 'bento-tag' }, pags.length + ' páginas')),
+          h('ol', { class: 'd-barras' }, pags.map((p, i) => h('li', { style: '--i:' + i },
+            h('span', {}, p.nome), h('b', {}, nf(p.n)), h('i', { style: '--w:' + (p.n / maxP * 100) + '%' })))))),
+        cel('tem', 3, h('article', { class: 'bento d-lista d-temas', 'data-sc-tilt': '4' },
+          h('header', {}, h('h3', {}, 'Publicações por tema'), h('span', { class: 'bento-tag' }, D.temas.length + ' temas')),
+          h('ol', { class: 'd-barras' }, D.temas.map((t, i) => h('li', { style: '--i:' + i },
+            h('a', { href: '#tema-' + t.id, 'data-ir': 'tema-' + t.id }, t.nome), h('b', {}, nf(pubT(t))), h('i', { style: '--w:' + (pubT(t) / maxT * 100) + '%' })))))))));
+  }
+
+  const ESTILOS_TEMA = ['preto', 'claro', 'amarelo', 'cinza'];
+  function temaSec(t, i) {
+    const estilo = ESTILOS_TEMA[i % ESTILOS_TEMA.length];
+    const pubs = t.noticias.reduce((s, n) => s + n.fontes.length, 0), q = t.noticias.length;
+    const cols = q <= 2 ? 2 : q <= 4 ? 2 : q <= 6 ? 3 : 4;
+    const cards = t.noticias.map((n, k) => quadro(h('button', { type: 'button', class: 'noticia', 'data-sc-tilt': '4', 'aria-label': n.titulo + ' · ver o post', onclick: () => abreNoticia(n, t) },
+      h('span', { class: 'noticia-fontes' }, n.fontes.map(f => h('span', { class: 'fonte' }, ic(redeDe(f.link)), f.pagina)),
+        n.fontes.length > 1 ? h('span', { class: 'pill pill--amarelo noticia-rep' }, 'em ' + n.fontes.length + ' páginas') : null),
+      h('b', { class: 'noticia-tit' }, n.titulo),
+      h('span', { class: 'noticia-txt' }, n.fontes[0].texto),
+      h('span', { class: 'noticia-ver so-tela' }, 'Ver o post ', ic('seta'))), cue((0.08 + k * 0.035).toFixed(3), (0.1 + (k % cols) * 0.04).toFixed(3))));
+    return cena(h('section', { class: 'sec sec--tema tema--' + estilo + (q <= 2 ? ' tema--poucos' : ''), id: 'tema-' + t.id, 'data-sec': 'tema', 'aria-labelledby': 't-tema-' + t.id },
+      h('header', { class: 'sec-cab', 'data-sc-cue': '0.06' },
+        h('div', {}, h('small', { class: 'tema-num' }, 'Tema ' + (i + 1)), h('h2', { id: 't-tema-' + t.id }, t.nome)),
+        h('p', {}, t.desc ? t.desc + ' ' : '', h('b', {}, pubs + (pubs === 1 ? ' publicação' : ' publicações')), ' · ' + q + (q === 1 ? ' assunto' : ' assuntos'))),
+      h('div', { class: 'noticias', style: '--cols:' + cols }, cards)));
+  }
+
+  function abreNoticia(n, t) {
+    let atual = 0;
+    const volta = document.activeElement;
+    const fecha = () => { caixa.classList.remove('is-on'); setTimeout(() => caixa.remove(), 250); document.removeEventListener('keydown', tecla); volta && volta.focus && volta.focus(); };
+    const tecla = e => { if (e.key === 'Escape') fecha(); };
+    const midia = h('div', { class: 'modal-midia modal-midia--noticia' });
+    const texto = h('p', {});
+    const abrir = h('a', { class: 'botao', target: '_blank', rel: 'noopener' }, ic('link'), 'Abrir na rede');
+    const abas = n.fontes.length > 1 ? h('div', { class: 'modal-fontes', role: 'group', 'aria-label': 'Páginas que publicaram' },
+      n.fontes.map((f, k) => h('button', { type: 'button', class: 'modal-alt', 'aria-pressed': 'false', onclick: () => mostra(k) }, ic(redeDe(f.link)), f.pagina))) : null;
+    function mostra(k) {
+      atual = k;
+      const f = n.fontes[k], rede = redeDe(f.link);
+      // links de compartilhamento do Facebook (/share/) não abrem no plugin: fica o aviso com o botão
+      const E = /facebook\.com\/share\//.test(f.link) ? null : embed(f.link);
+      midia.replaceChildren(E
+        ? h('iframe', { class: 'modal-embed', src: E.src, title: 'Post de ' + f.pagina + ' na rede', allow: 'encrypted-media; picture-in-picture; clipboard-write', allowfullscreen: true, onload: e => e.target.classList.add('is-ok') })
+        : h('div', { class: 'modal-sem' }, h('span', { class: 'rede-ic' }, ic(rede)), h('p', {}, 'Este post do ' + (rede === 'facebook' ? 'Facebook' : 'perfil') + ' abre direto na rede.'),
+            h('a', { class: 'botao', href: f.link, target: '_blank', rel: 'noopener' }, ic('link'), 'Abrir o post')));
+      texto.textContent = '“' + f.texto + '”';
+      abrir.href = f.link;
+      rotulo.lastChild.textContent = f.pagina + ' · ' + t.nome;
+      rotulo.firstChild.replaceWith(ic(rede));
+      if (abas) [...abas.children].forEach((b, j) => { b.classList.toggle('is-ativo', j === k); b.setAttribute('aria-pressed', j === k ? 'true' : 'false'); });
+    }
+    const rotulo = h('span', { class: 'modal-rede' }, ic('instagram'), h('span', {}, ''));
+    const bx = h('button', { class: 'modal-x', type: 'button', 'aria-label': 'Fechar', onclick: fecha }, ic('fechar'));
+    const caixa = h('div', { class: 'modal modal--noticia', role: 'dialog', 'aria-modal': 'true', 'aria-label': n.titulo, onclick: e => { if (e.target === caixa) fecha(); } },
+      h('div', { class: 'modal-corpo' },
+        midia,
+        h('div', { class: 'modal-txt' },
+          rotulo,
+          h('b', { class: 'modal-tema' }, n.titulo),
+          abas ? h('small', { class: 'modal-rep' }, 'Saiu em ' + n.fontes.length + ' páginas:') : null,
+          abas,
+          texto,
+          h('div', { class: 'modal-acoes' }, abrir)),
+        bx));
+    mostra(0);
+    document.body.append(caixa);
+    document.addEventListener('keydown', tecla);
+    requestAnimationFrame(() => { caixa.classList.add('is-on'); bx.focus(); });
   }
 
   /* ---------------- menu flutuante ---------------- */
@@ -407,6 +553,7 @@
           onclick: () => { fechar(); tem && !ativo && ctx.trocar(t); } }, ic(icn), nome, !tem ? h('small', {}, 'em breve') : ativo ? ic('check', 'menu-ok') : null);
       }),
       h('hr', {}),
+      ctx.tipo === 'diario' ? h('button', { type: 'button', role: 'menuitem', class: 'menu-it', onclick: () => { fechar(); irPara('calendario'); } }, ic('dia'), 'Calendário') : null,
       h('button', { type: 'button', role: 'menuitem', class: 'menu-it', onclick: () => { fechar(); exportaPdf(); } }, ic('pdf'), 'Exportar PDF'),
       h('button', { type: 'button', role: 'menuitem', class: 'menu-it', onclick: () => { fechar(); compartilhar(); } }, ic('compartilhar'), 'Compartilhar'),
       h('button', { type: 'button', role: 'menuitem', class: 'menu-it', onclick: () => { fechar(); irPara('inicio'); } }, ic('topo'), 'Ir para o início'),
@@ -545,8 +692,9 @@
     document.title = 'Relatório ' + TIPO_TXT[D.tipo] + ' · ' + D.cliente.nome + ' · ' + D.periodo.texto;
     if (motor) { motor.destroy(); motor = null; }
     const main = h('main', { class: 'rel', id: 'rel' },
-      capa(D, cfg, ctx), resumo(D), numeros(D),
+      capa(D, cfg, ctx), calendario(D, ctx), resumo(D), numeros(D), numerosDia(D),
       (D.redes || []).map((r, i) => rede(r, i, D)),
+      (D.temas || []).map((t, i) => temaSec(t, i)),
       publicacoes(D, ctx), sentimento(D), publicadores(D), termos(D), fechamento(D, cfg));
     const antigo = document.getElementById('rel');
     if (antigo) antigo.replaceWith(main); else document.body.prepend(main);
@@ -633,7 +781,8 @@
         const abs = p => p ? new URL(p, new URL(base, location.href)).href : p;
         if (D.capa) { D.capa.foto = abs(D.capa.foto); D.capa.celular = abs(D.capa.celular); }
         (D.redes || []).forEach(r => { if (r.destaque) r.destaque.print = abs(r.destaque.print); });
-        const ctx = { edicoes: ed, tipo: t, data: d, sair: cfg.trancado ? sair : null, trocar: novo => { const nd = ultima(novo); if (!nd) return; history.replaceState(null, '', '?r=' + novo + '/' + nd); carrega(novo, nd, true); } };
+        const ctx = { edicoes: ed, tipo: t, data: d, sair: cfg.trancado ? sair : null, trocar: novo => { const nd = ultima(novo); if (!nd) return; history.replaceState(null, '', '?r=' + novo + '/' + nd); carrega(novo, nd, true); },
+          abrir: (nt, nd) => { if (!(ed[nt] || []).includes(nd)) return; history.replaceState(null, '', '?r=' + nt + '/' + nd); carrega(nt, nd, true); } };
         if (troca) { document.body.classList.add('trocando'); setTimeout(() => { monta(D, cfg, ctx); scrollTo(0, 0); document.body.classList.remove('trocando'); }, 260); }
         else monta(D, cfg, ctx);
       }
